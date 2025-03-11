@@ -35,7 +35,8 @@ class GameAnalyze:
             '花费': 'int16',
             '胜负': 'category',
             'CODE': 'category',
-            '玩家': 'category'
+            '玩家': 'category',
+            '中文名': 'category'
         }
         df = pd.read_csv('game_analysis.csv', dtype=dtypes)
         df['类型'] = df['颜色'].map(COLOR_MAPPING).astype('category')
@@ -98,45 +99,63 @@ def render_config():
     </style>
     """, unsafe_allow_html=True)
 
+@st.cache_data(ttl=3600)
+def cached_filter(df, **kwargs):
+    filter_mask = pd.Series(True, index=df.index)
+    for col, (filter_type, values) in kwargs.items():
+        if filter_type == 'multi':
+            if values:
+                filter_mask &= df[col].isin(values)
+        elif filter_type == 'range':
+            filter_mask &= df[col].between(*values)
+    return df[filter_mask]
+
+@st.cache_data(ttl=3600)
+def cached_groupby(df, dimensions):
+    result = df.groupby(dimensions).apply(calculate_stats).reset_index()
+    result = result[result.总场数 > 0]
+    print(result)
+    return result
+
 
 def render_filter(ga: GameAnalyze):
     # 侧边栏筛选
     st.sidebar.header("筛选条件")
 
     df = ga.df.copy()
-    filter_mask = pd.Series(True, index=df.index)
+    filter_args = dict()
     for col, multi_filter in ga.multi_filters.items():
-        values = st.sidebar.multiselect(col, multi_filter)
-        if values:
-            filter_mask &= df[col].isin(values)
+        filter_args[col] = 'multi', st.sidebar.multiselect(col, multi_filter)
 
     for col, (min_value, max_value) in ga.range_filters.items():
-        values = st.sidebar.slider(
+        filter_args[col] = 'range', st.sidebar.slider(
             f'{col}范围',
             min_value=int(min_value),
             max_value=int(max_value),
             value=(int(min_value), int(max_value))
         )
-        filter_mask &= df[col].between(*values)
 
-    return df[filter_mask]
+    return cached_filter(df, **filter_args)
 
 
 # 核心计算逻辑
 def calculate_stats(group):
     base_groups = {
-        '总场': group,
-        '胜场': group[group['胜负'] == '赢'],
-        '负场': group[group['胜负'] != '赢']
+        '总场': pd.Series(True, index=group.index),
+        '胜场': group['胜负'].eq('赢'),
+        '负场': group['胜负'].ne('赢')
     }
-    unique_counts = {name: len(base_groups[name].drop_duplicates(subset=['CODE', '玩家'])) for name in base_groups}
+    unique_counts = {
+        name: group.loc[mask, ['CODE', '玩家']].drop_duplicates().shape[0]
+        for name, mask in base_groups.items()
+    }
 
     return pd.Series({
-        '胜率': unique_counts['胜场'] / unique_counts['总场'] if unique_counts['总场'] else 0,
-        **{f'{name}数': value for name, value in unique_counts.items()},
-        **{f'{name}平均{stat}': base_groups[name][stat].mean()
+        '胜率': unique_counts['胜场'] / unique_counts['总场'] if unique_counts['总场'] > 0 else 0,
+        **{f'{k}数': v for k, v in unique_counts.items()},
+        **{f'{k}平均{stat}': group.loc[mask, stat].mean()
            for stat in ['轮次', '花费']
-           for name in base_groups.keys()}
+           for k, mask in base_groups.items()},
     })
 
 
@@ -201,19 +220,19 @@ def render_graph(df):
 
 def render_pagination(result, page_size, control):
     # 分页逻辑
-    if page_size != '全部':
-        total_pages = (len(result) - 1) // page_size + 1
-        if total_pages > 1:
-            current_page = control.number_input('页码', min_value=1, max_value=total_pages) - 1
-            return result.iloc[current_page * page_size: (current_page + 1) * page_size]
+    total_pages = (len(result) - 1) // page_size + 1
+    if total_pages > 1:
+        current_page = control.number_input('页码', min_value=1, max_value=total_pages) - 1
+        return result.iloc[current_page * page_size: (current_page + 1) * page_size]
     return result
 
 
 def render_main(df):
     # 主界面
-    st.title('卡牌胜率分析仪表盘')
+    st.title('历史巨轮卡牌胜率统计')
+    st.subheader('统计范围：Royal League S1-S3, Premier League S1-S4')
     control_cols = st.columns([2, 2, 4, 2, 2])
-    page_size = control_cols[0].selectbox('每页显示行数', [5, 10, 20, 50, '全部'], index=1)
+    page_size = control_cols[0].selectbox('每页显示行数', [5, 10, 20, 50, 100], index=1)
 
     ANAL_DIMS = ['卡名', '行为', '先后', '轮次', '花费', '玩家']
 
@@ -224,7 +243,7 @@ def render_main(df):
         sort_type = control_cols[4].selectbox('排序方式', ['降序', '升序'])
 
         if selected_dimensions:
-            result = df.groupby(selected_dimensions).apply(calculate_stats).reset_index()
+            result = cached_groupby(df, selected_dimensions)
             result['维度组合'] = result[selected_dimensions].apply(lambda x: ' - '.join(x.astype(str)), axis=1)
             result = result.sort_values(by=sort_order, ascending=sort_type == '升序')
 
