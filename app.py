@@ -12,206 +12,154 @@ COLOR_MAPPING = {
     12: '建筑',
     13: '部队',
     14: '政府',
-    15: '蓝卡',
+    15: '蓝科',
     16: '阵形',
     18: '侵略',
     21: '战争'
 }
 
-# 页面配置
-st.set_page_config(
-    page_title="卡牌胜率分析",
-    layout="wide",
-    initial_sidebar_state="auto"
-)
-
-# 自定义CSS样式
-st.markdown("""
-<style>
-.block-container {
-    padding-top: 1rem;
-    padding-bottom: 0rem;
-    padding-left: 5rem;
-    padding-right: 5rem;
-}
-.stDataFrame {
-    width: 100% !important;
-}
-.css-1dj4j8c {
-    max-width: 100% !important;
-}
-
-/* 新增卡片化设计 */
-.css-1p05t8e {
-    border-radius: 15px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    padding: 2rem;
-    margin: 1rem 0;
-    background: white;
-}
-
-/* 图表容器美化 */
-.plot-container {
-    border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-/* 表格标题样式 */
-h2 {
-    color: #2c3e50 !important;
-    border-bottom: 2px solid #3498db;
-    padding-bottom: 0.5rem;
-}
-
-/* 侧边栏美化 */
-[data-testid="stSidebar"] {
-    background: linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%);
-    padding: 1rem;
-}
-</style>
-""", unsafe_allow_html=True)
-
 
 # 数据预处理
-@st.cache_data
-def load_data():
-    df = pd.read_csv('game_analysis.csv')  # 替换为实际文件名
-    df['卡牌类型'] = df['颜色'].map(COLOR_MAPPING)
-    df['轮次'] = df['轮次'].astype(int)
-    df['花费'] = df['花费'].astype(int)
-    return df.rename(columns={'中文名': '卡名'})
+@st.cache_resource
+class GameAnalyze:
+    def __init__(self):
+        self.df = self._load_df()
+        self.multi_filters = {col: self.df[col].unique() for col in ['组别', '类型', '卡名', '行为', '先后', '玩家']}
+        self.range_filters = {col: (self.df[col].min(), self.df[col].max()) for col in ['轮次', '花费']}
+
+    @staticmethod
+    def _load_df():
+        dtypes = {
+            '颜色': 'int8',
+            '轮次': 'int16',
+            '花费': 'int16',
+            '胜负': 'category',
+            'CODE': 'category',
+            '玩家': 'category'
+        }
+        df = pd.read_csv('game_analysis.csv', dtype=dtypes)
+        df['类型'] = df['颜色'].map(COLOR_MAPPING).astype('category')
+        df = df.rename(columns={'中文名': '卡名'})
+        return df
 
 
-df = load_data()
+def render_config():
+    # 页面配置
+    st.set_page_config(
+        page_title="卡牌胜率分析",
+        layout="wide",
+        initial_sidebar_state="auto"
+    )
 
-# 侧边栏筛选
-st.sidebar.header("筛选条件")
-filters = [
-    ('组别', st.sidebar.multiselect('组别', df['组别'].unique())),
-    ('卡牌类型', st.sidebar.multiselect('卡牌类型', df['卡牌类型'].unique())),
-    ('卡名', st.sidebar.multiselect('卡名', df['卡名'].unique())),
-    ('行为', st.sidebar.multiselect('行为', df['行为'].unique())),
-    ('先后', st.sidebar.multiselect('先后手', df['先后'].unique())),
-    ('玩家', st.sidebar.multiselect('玩家', df['玩家'].unique()))
-]
+    # 自定义CSS样式
+    st.markdown("""
+    <style>
+    .block-container {
+        papding-top: 1rem;
+        papding-bottom: 0rem;
+        papding-left: 5rem;
+        papding-right: 5rem;
+    }
+    .stDataFrame {
+        width: 100% !important;
+    }
+    .css-1dj4j8c {
+        max-width: 100% !important;
+    }
+    
+    /* 新增卡片化设计 */
+    .css-1p05t8e {
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        papding: 2rem;
+        margin: 1rem 0;
+        background: white;
+    }
+    
+    /* 图表容器美化 */
+    .plot-container {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        overflow: hipden;
+    }
+    
+    /* 表格标题样式 */
+    h2 {
+        color: #2c3e50 !important;
+        border-bottom: 2px solid #3498db;
+        papding-bottom: 0.5rem;
+    }
+    
+    /* 侧边栏美化 */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%);
+        papding: 1rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-round_range = st.sidebar.slider(
-    '轮次范围',
-    min_value=int(df['轮次'].min()),
-    max_value=int(df['轮次'].max()),
-    value=(int(df['轮次'].min()), int(df['轮次'].max()))
-)
 
-cost_range = st.sidebar.slider(
-    '花费范围',
-    min_value=int(df['花费'].min()),
-    max_value=int(df['花费'].max()),
-    value=(int(df['花费'].min()), int(df['花费'].max()))
-)
+def render_filter(ga: GameAnalyze):
+    # 侧边栏筛选
+    st.sidebar.header("筛选条件")
 
-# 数据过滤
-filtered_df = df[
-    df['轮次'].between(*round_range) &
-    df['花费'].between(*cost_range)
-    ]
+    df = ga.df.copy()
+    filter_mask = pd.Series(True, index=df.index)
+    for col, multi_filter in ga.multi_filters.items():
+        values = st.sidebar.multiselect(col, multi_filter)
+        if values:
+            filter_mask &= df[col].isin(values)
 
-for col, values in filters:
-    if values:
-        filtered_df = filtered_df[filtered_df[col].isin(values)]
+    for col, (min_value, max_value) in ga.range_filters.items():
+        values = st.sidebar.slider(
+            f'{col}范围',
+            min_value=int(min_value),
+            max_value=int(max_value),
+            value=(int(min_value), int(max_value))
+        )
+        filter_mask &= df[col].between(*values)
+
+    return df[filter_mask]
 
 
 # 核心计算逻辑
 def calculate_stats(group):
-    wins = group[group['胜负'] == '赢']
-    loses = group[group['胜负'] != '赢']
-
-    dups = len(group.drop_duplicates(subset=['CODE', '玩家']))
-    win_dups = len(wins.drop_duplicates(subset=['CODE', '玩家']))
+    base_groups = {
+        '总场': group,
+        '胜场': group[group['胜负'] == '赢'],
+        '负场': group[group['胜负'] != '赢']
+    }
+    unique_counts = {name: len(base_groups[name].drop_duplicates(subset=['CODE', '玩家'])) for name in base_groups}
 
     return pd.Series({
-        '胜率': win_dups / dups if dups else 0,
-        '总场数': dups,
-        '胜场': win_dups,
-        '负场': len(loses.drop_duplicates(subset=['CODE', '玩家'])),
-        **{f'平均{k}': v.mean() for k, v in {
-            '轮次': group['轮次'],
-            '胜场轮次': wins['轮次'],
-            '负场轮次': loses['轮次'],
-            '花费': group['花费'],
-            '胜场花费': wins['花费'],
-            '负场花费': loses['花费']
-        }.items()}
+        '胜率': unique_counts['胜场'] / unique_counts['总场'] if unique_counts['总场'] else 0,
+        **{f'{name}数': value for name, value in unique_counts.items()},
+        **{f'{name}平均{stat}': base_groups[name][stat].mean()
+           for stat in ['轮次', '花费']
+           for name in base_groups.keys()}
     })
 
 
-# 主界面
-st.title('卡牌胜率分析仪表盘')
-control_cols = st.columns([2, 2, 4, 4])
-with control_cols[0]:
-    page_size = st.selectbox('每页显示行数', [5, 10, 20, 50, '全部'], index=1)
-
-ANAL_DIMS = ['卡名', '行为', '先后', '轮次', '花费', '玩家']
-
-result = pd.DataFrame()
-if not filtered_df.empty:
-    with control_cols[2]:
-        selected_dimensions = st.multiselect(
-            '分析维度',
-            ANAL_DIMS,
-            default=['卡名']
-        )
-    with control_cols[3]:
-        sort_order = st.selectbox('排序方式', [
-            '胜率降序', '胜率升序',
-            '总场数降序', '总场数升序',
-            '胜场降序', '胜场升序'
-        ])
-
-    if selected_dimensions:
-        result = filtered_df.groupby(selected_dimensions).apply(calculate_stats).reset_index()
-        result['维度组合'] = result[selected_dimensions].apply(lambda x: ' - '.join(x.astype(str)), axis=1)
-
-        # 动态排序
-        sort_config = {
-            '胜率降序': ('胜率', False),
-            '胜率升序': ('胜率', True),
-            '总场数降序': ('总场数', False),
-            '总场数升序': ('总场数', True),
-            '胜场降序': ('胜场', False),
-            '胜场升序': ('胜场', True)
-        }[sort_order]
-        print(result.columns)
-        result = result.sort_values(by=sort_config[0], ascending=sort_config[1])
-
-# 结果展示
-if not result.empty:
-    # 分页逻辑
-    if page_size != '全部':
-        with control_cols[1]:
-            total_pages = (len(result) - 1) // page_size + 1
-            current_page = st.selectbox('页码', range(1, total_pages + 1)) - 1
-            paginated_df = result.iloc[current_page * page_size: (current_page + 1) * page_size]
-    else:
-        paginated_df = result
-
+def render_table(result):
     # 使用渐变色样式
-    styled_df = paginated_df.style.background_gradient(
+    styled_df = result.style.background_gradient(
         subset=['胜率'],
         cmap='RdYlGn',  # 红-黄-绿渐变色
         vmin=0,
         vmax=1
     ).format({
         '胜率': '{:.1%}',
-        **{col: '{:.0f}' for col in result.columns if '场' in col},
+        **{col: '{:.0f}' for col in result.columns if col[-1] == '数'},
         **{col: '{:.1f}' for col in result.columns if '平均' in col}
     })
 
-    st.dataframe(styled_df, height=500, use_container_width=True, hide_index=True)
+    st.dataframe(styled_df, height=400, use_container_width=True, hide_index=True)
 
+
+def render_graph(df):
     # 可视化图表
     fig = px.bar(
-        result,
+        df,
         x='维度组合',
         y='胜率',
         color='胜率',
@@ -238,11 +186,63 @@ if not result.empty:
         ),
         margin=dict(l=20, r=20, t=40, b=20)
     )
-
+    # 添加点击事件
+    fig.update_traces(
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "胜率: %{y:.1%}<br>"
+            "总场数: %{customdata[0]}<br>"
+            "胜场数: %{customdata[1]}"
+        ),
+        customdata=df[['总场数', '胜场数']].values
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    # 显示原始数据（可选）
-    if st.checkbox('显示原始数据'):
-        st.write(filtered_df)
-else:
-    st.warning('当前筛选条件下无数据')
+
+def render_pagination(result, page_size, control):
+    # 分页逻辑
+    if page_size != '全部':
+        total_pages = (len(result) - 1) // page_size + 1
+        if total_pages > 1:
+            current_page = control.number_input('页码', min_value=1, max_value=total_pages) - 1
+            return result.iloc[current_page * page_size: (current_page + 1) * page_size]
+    return result
+
+
+def render_main(df):
+    # 主界面
+    st.title('卡牌胜率分析仪表盘')
+    control_cols = st.columns([2, 2, 4, 2, 2])
+    page_size = control_cols[0].selectbox('每页显示行数', [5, 10, 20, 50, '全部'], index=1)
+
+    ANAL_DIMS = ['卡名', '行为', '先后', '轮次', '花费', '玩家']
+
+    result = pd.DataFrame()
+    if not df.empty:
+        selected_dimensions = control_cols[2].multiselect('分析维度', ANAL_DIMS, default=['卡名'])
+        sort_order = control_cols[3].selectbox('排序依据', ['胜率', '总场数', '胜场'])
+        sort_type = control_cols[4].selectbox('排序方式', ['降序', '升序'])
+
+        if selected_dimensions:
+            result = df.groupby(selected_dimensions).apply(calculate_stats).reset_index()
+            result['维度组合'] = result[selected_dimensions].apply(lambda x: ' - '.join(x.astype(str)), axis=1)
+            result = result.sort_values(by=sort_order, ascending=sort_type == '升序')
+
+    # 结果展示
+    if not result.empty:
+        paginated_result = render_pagination(result, page_size, control_cols[1])
+        render_table(paginated_result)
+        render_graph(result)
+        # 显示原始数据（可选）
+        if st.checkbox('显示原始数据'):
+            st.write(df)
+    else:
+        st.warning('当前筛选条件下无数据')
+
+
+def render(ga: GameAnalyze):
+    df = render_filter(ga)
+    render_main(df)
+
+
+render(GameAnalyze())
