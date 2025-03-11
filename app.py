@@ -99,23 +99,27 @@ def render_config():
     </style>
     """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=3600)
-def cached_filter(df, **kwargs):
-    filter_mask = pd.Series(True, index=df.index)
-    for col, (filter_type, values) in kwargs.items():
-        if filter_type == 'multi':
-            if values:
-                filter_mask &= df[col].isin(values)
-        elif filter_type == 'range':
-            filter_mask &= df[col].between(*values)
-    return df[filter_mask]
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_filter(df, **kwargs):
+    with st.spinner("正在处理数据，请稍候..."):
+        filter_mask = pd.Series(True, index=df.index)
+        for col, (filter_type, values) in kwargs.items():
+            if filter_type == 'multi':
+                if values:
+                    filter_mask &= df[col].isin(values)
+            elif filter_type == 'range':
+                filter_mask &= df[col].between(*values)
+        return df[filter_mask]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def cached_groupby(df, dimensions):
-    result = df.groupby(dimensions).apply(calculate_stats).reset_index()
-    result = result[result.总场数 > 0]
-    print(result)
-    return result
+    with st.spinner("正在处理数据，请稍候..."):
+        result = df.groupby(dimensions).apply(calculate_stats).reset_index()
+        result = result[result.总场数 > 0]
+        print(result)
+        return result
 
 
 def render_filter(ga: GameAnalyze):
