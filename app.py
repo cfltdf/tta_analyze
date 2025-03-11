@@ -151,12 +151,14 @@ control_cols = st.columns([2, 2, 4, 4])
 with control_cols[0]:
     page_size = st.selectbox('每页显示行数', [5, 10, 20, 50, '全部'], index=1)
 
+ANAL_DIMS = ['卡名', '行为', '先后', '轮次', '花费', '玩家']
+
 result = pd.DataFrame()
 if not filtered_df.empty:
     with control_cols[2]:
         selected_dimensions = st.multiselect(
             '分析维度',
-            ['卡名', '轮次', '行为', '花费', '玩家'],
+            ANAL_DIMS,
             default=['卡名']
         )
     with control_cols[3]:
