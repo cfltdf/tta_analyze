@@ -118,7 +118,6 @@ def cached_groupby(df, dimensions):
     with st.spinner("正在处理数据，请稍候..."):
         result = df.groupby(dimensions).apply(calculate_stats).reset_index()
         result = result[result.总场数 > 0]
-        print(result)
         return result
 
 
