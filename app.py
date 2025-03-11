@@ -176,6 +176,8 @@ def render_table(result):
         **{col: '{:.1f}' for col in result.columns if '平均' in col}
     })
 
+    styled_df.hide_index_ = True
+    styled_df.hidden_columns = [len(styled_df.data.columns) - 1]
     st.dataframe(styled_df, height=400, use_container_width=True, hide_index=True)
 
 
@@ -209,6 +211,14 @@ def render_graph(df):
         ),
         margin=dict(l=20, r=20, t=40, b=20)
     )
+    # 动态添加文本标签
+    if len(df) < 100:
+        fig.update_traces(
+            text=df['胜率'].apply(lambda x: f"{x:.1%}"),
+            textposition='inside',
+            textfont=dict(size=12, color='#333')
+        )
+
     # 添加点击事件
     fig.update_traces(
         hovertemplate=(
@@ -243,7 +253,7 @@ def render_main(df):
     result = pd.DataFrame()
     if not df.empty:
         selected_dimensions = control_cols[2].multiselect('分析维度', ANAL_DIMS, default=['卡名'])
-        sort_order = control_cols[3].selectbox('排序依据', ['胜率', '总场数', '胜场'])
+        sort_order = control_cols[3].selectbox('排序依据', ['胜率', '总场数', '胜场数'])
         sort_type = control_cols[4].selectbox('排序方式', ['降序', '升序'])
 
         if selected_dimensions:
