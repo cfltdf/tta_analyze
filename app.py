@@ -19,31 +19,6 @@ COLOR_MAPPING = {
 }
 
 
-# 数据预处理
-@st.cache_resource
-class GameAnalyze:
-    def __init__(self):
-        self.df = self._load_df()
-        self.multi_filters = {col: self.df[col].unique() for col in ['组别', '类型', '卡名', '行为', '先后', '玩家']}
-        self.range_filters = {col: (self.df[col].min(), self.df[col].max()) for col in ['轮次', '花费']}
-
-    @staticmethod
-    def _load_df():
-        dtypes = {
-            '颜色': 'int8',
-            '轮次': 'int16',
-            '花费': 'int16',
-            '胜负': 'category',
-            'CODE': 'category',
-            '玩家': 'category',
-            '中文名': 'category'
-        }
-        df = pd.read_csv('game_analysis.csv', dtype=dtypes)
-        df['类型'] = df['颜色'].map(COLOR_MAPPING).astype('category')
-        df = df.rename(columns={'中文名': '卡名'})
-        return df
-
-
 def render_config():
     # 页面配置
     st.set_page_config(
@@ -67,7 +42,7 @@ def render_config():
     .css-1dj4j8c {
         max-width: 100% !important;
     }
-    
+
     /* 新增卡片化设计 */
     .css-1p05t8e {
         border-radius: 15px;
@@ -76,21 +51,21 @@ def render_config():
         margin: 1rem 0;
         background: white;
     }
-    
+
     /* 图表容器美化 */
     .plot-container {
         border: 1px solid #e0e0e0;
         border-radius: 12px;
         overflow: hipden;
     }
-    
+
     /* 表格标题样式 */
     h2 {
         color: #2c3e50 !important;
         border-bottom: 2px solid #3498db;
         papding-bottom: 0.5rem;
     }
-    
+
     /* 侧边栏美化 */
     [data-testid="stSidebar"] {
         background: linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%);
@@ -98,6 +73,34 @@ def render_config():
     }
     </style>
     """, unsafe_allow_html=True)
+
+
+render_config()
+
+
+# 数据预处理
+@st.cache_resource
+class GameAnalyze:
+    def __init__(self):
+        self.df = self._load_df()
+        self.multi_filters = {col: self.df[col].unique() for col in ['组别', '类型', '卡名', '行为', '先后', '玩家']}
+        self.range_filters = {col: (self.df[col].min(), self.df[col].max()) for col in ['轮次', '花费']}
+
+    @staticmethod
+    def _load_df():
+        dtypes = {
+            '颜色': 'int8',
+            '轮次': 'int16',
+            '花费': 'int16',
+            '胜负': 'category',
+            'CODE': 'category',
+            '玩家': 'category',
+            '中文名': 'category'
+        }
+        df = pd.read_csv('game_analysis.csv', dtype=dtypes)
+        df['类型'] = df['颜色'].map(COLOR_MAPPING).astype('category')
+        df = df.rename(columns={'中文名': '卡名'})
+        return df
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
