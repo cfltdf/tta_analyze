@@ -176,10 +176,7 @@ def render_table(result):
         '胜率': '{:.1%}',
         **{col: '{:.0f}' for col in result.columns if col[-1] == '数'},
         **{col: '{:.1f}' for col in result.columns if '平均' in col}
-    })
-
-    styled_df.hide_index_ = True
-    styled_df.hidden_columns = [len(styled_df.data.columns) - 1]
+    }).hide(['维度组合'], axis=1)
     st.dataframe(styled_df, height=400, use_container_width=True, hide_index=True)
 
 
